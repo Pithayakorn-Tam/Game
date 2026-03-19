@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy Furry - Relaxing Edition</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #ffe6f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            flex-direction: column;
+        }
+        #gameCanvas {
+            background-color: #fff0f5;
+            border: 4px solid #ffb3c6;
+            border-radius: 10px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            cursor: pointer;
+        }
+        #instructions {
+            margin-bottom: 15px;
+            text-align: center;
+            color: #d16b8c;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+    </style>
+</head>
+<body>
+    <div id="instructions">
+        Press <b>Spacebar</b> or <b>Click</b> to jump<br>
+        <span style="font-size: 0.9rem; font-weight: normal;">(Make sure 'femboy-furry.png' is in the same folder as this file)</span>
+    </div>
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // ---------------------------------------------------------
+        // Character Image Setup
+        // ---------------------------------------------------------
+        const playerImage = new Image();
+        playerImage.src = "femboy-furry.png"; 
+        
+        // ---------------------------------------------------------
+
+        // Game Variables
+        let frames = 0;
+        let score = 0;
+        let bestScore = 0;
+        let currentGameState = "START"; 
+
+        // Bird (Player) Setup
+        const bird = {
+            x: 50,
+            y: 150,
+            width: 125,  
+            height: 125, 
+            velocity: 0,
+            gravity: 0.20, 
+            jump: -5.0,  
+            
+            draw: function() {
+                if (playerImage.complete && playerImage.naturalWidth !== 0) {
+                    ctx.drawImage(playerImage, this.x, this.y, this.width, this.height);
+                } else {
+                    ctx.fillStyle = "#ff85a2";
+                    ctx.fillRect(this.x, this.y, this.width, this.height);
+                    ctx.strokeStyle = "#ffffff";
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(this.x, this.y, this.width, this.height);
+                }
+            },
+            update: function() {
+                this.velocity += this.gravity;
+                this.y += this.velocity;
+
+                if (this.y + this.height >= canvas.height) {
+                    this.y = canvas.height - this.height;
+                    currentGameState = "GAME_OVER";
+                }
+                if (this.y <= 0) {
+                    this.y = 0;
+                    this.velocity = 0;
+                }
+            },
+            flap: function() {
+                this.velocity = this.jump;
+            }
+        };
+
+        // Pipes Setup - VERY RELAXED
+        const pipes = {
+            items: [],
+            width: 90,   
+            gap: 350,    // แกน Y: ช่องว่างกว้างมาก (350px)
+            dx: 1.8,     
+            
+            draw: function() {
+                for (let i = 0; i < this.items.length; i++) {
+                    let p = this.items[i];
+                    
+                    ctx.fillStyle = "#ffb3c6"; 
+                    ctx.strokeStyle = "#d16b8c";
+                    ctx.lineWidth = 3;
+                    
+                    ctx.fillRect(p.x, 0, this.width, p.top);
+                    ctx.strokeRect(p.x, 0, this.width, p.top);
+                    
+                    ctx.fillRect(p.x, canvas.height - p.bottom, this.width, p.bottom);
+                    ctx.strokeRect(p.x, canvas.height - p.bottom, this.width, p.bottom);
+                }
+            },
+            update: function() {
+                // แกน X: สร้างเสาใหม่ทุกๆ 180 เฟรม (ทิ้งช่วงห่างกันมากขึ้น)
+                if (frames % 180 === 0) {
+                    let minPipeHeight = 60;
+                    let maxPipeHeight = canvas.height - this.gap - minPipeHeight;
+                    let topHeight = Math.floor(Math.random() * (maxPipeHeight - minPipeHeight + 1)) + minPipeHeight;
+                    let bottomHeight = canvas.height - this.gap - topHeight;
+
+                    this.items.push({
+                        x: canvas.width,
+                        top: topHeight,
+                        bottom: bottomHeight,
+                        passed: false
+                    });
+                }
+
+                for (let i = 0; i < this.items.length; i++) {
+                    let p = this.items[i];
+                    p.x -= this.dx;
+
+                    let bx = bird.x;
+                    let by = bird.y;
+                    let bw = bird.width;
+                    let bh = bird.height;
+                    let hitboxPadding = 15; // ลด Hitbox ลงอีกเพื่อให้ชนยากขึ้นไปอีก
+
+                    if (bx + bw - hitboxPadding > p.x && bx + hitboxPadding < p.x + this.width) {
+                        if (by + hitboxPadding < p.top || by + bh - hitboxPadding > canvas.height - p.bottom) {
+                            currentGameState = "GAME_OVER";
+                        }
+                    }
+
+                    if (p.x + this.width < bx && !p.passed) {
+                        score++;
+                        p.passed = true;
+                    }
+
+                    if (p.x + this.width < 0) {
+                        this.items.shift();
+                        i--;
+                    }
+                }
+            },
+            reset: function() {
+                this.items = [];
+            }
+        };
+
+        // UI & Text
+        function drawScore() {
+            ctx.fillStyle = "#d16b8c";
+            ctx.font = "35px 'Segoe UI', Tahoma, sans-serif";
+            ctx.fontWeight = "bold";
+            ctx.textAlign = "center";
+            
+            if (currentGameState === "PLAYING") {
+                ctx.fillText(score, canvas.width / 2, 60);
+            } else if (currentGameState === "START") {
+                ctx.fillText("Flappy Furry", canvas.width / 2, canvas.height / 2 - 40);
+                ctx.font = "20px 'Segoe UI'";
+                ctx.fillText("Click to Start", canvas.width / 2, canvas.height / 2 + 10);
+            } else if (currentGameState === "GAME_OVER") {
+                ctx.fillText("Game Over!", canvas.width / 2, canvas.height / 2 - 60);
+                ctx.font = "24px 'Segoe UI'";
+                ctx.fillText("Score: " + score, canvas.width / 2, canvas.height / 2 - 10);
+                ctx.fillText("Best Score: " + bestScore, canvas.width / 2, canvas.height / 2 + 30);
+                ctx.font = "18px 'Segoe UI'";
+                ctx.fillText("Click to Restart", canvas.width / 2, canvas.height / 2 + 90);
+            }
+            ctx.textAlign = "left"; 
+        }
+
+        // Main Game Loop
+        function loop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height); 
+
+            if (currentGameState === "START") {
+                bird.draw();
+            } else if (currentGameState === "PLAYING") {
+                pipes.update();
+                pipes.draw();
+                bird.update();
+                bird.draw();
+                frames++;
+            } else if (currentGameState === "GAME_OVER") {
+                pipes.draw(); 
+                bird.draw();
+                bestScore = Math.max(score, bestScore);
+            }
+            
+            drawScore();
+            requestAnimationFrame(loop);
+        }
+
+        // Controls
+        function handleAction() {
+            if (currentGameState === "START") {
+                currentGameState = "PLAYING";
+                bird.flap();
+            } else if (currentGameState === "PLAYING") {
+                bird.flap();
+            } else if (currentGameState === "GAME_OVER") {
+                bird.y = 150;
+                bird.velocity = 0;
+                pipes.reset();
+                score = 0;
+                frames = 0;
+                currentGameState = "START";
+            }
+        }
+
+        // Event Listeners
+        window.addEventListener("keydown", (e) => {
+            if (e.code === "Space") {
+                e.preventDefault();
+                handleAction();
+            }
+        });
+        canvas.addEventListener("mousedown", handleAction);
+        canvas.addEventListener("touchstart", (e) => {
+            e.preventDefault();
+            handleAction();
+        });
+
+        // Start Loop
+        playerImage.onload = loop; 
+        playerImage.onerror = loop; 
+        if(playerImage.src === "") loop(); 
+    </script>
+</body>
+</html>
